@@ -7,12 +7,13 @@ import sys
 pygame.init()
 
 # Constantes
-WIDTH, HEIGHT = 1920, 1080
-PLAYER_SIZE = 80
+MAP_WIDTH, MAP_HEIGHT = 3840, 2160  # Tamanho do mapa
+WIDTH, HEIGHT = 1920, 1080  # Tamanho da tela
+PLAYER_SIZE = 120
 ENEMY_SIZE = 50
 PROJECTILE_SIZE = 35
 BACKGROUND_COLOR = (0, 0, 0)
-BACKGROUND_IMAGE_PATH = 'background.jpg'
+BACKGROUND_IMAGE_PATH = 'images/background.jpg'
 PLAYER_IMAGE_PATH = 'player.png'
 ENEMY_IMAGE_PATH = 'images/enemy1.png'
 PROJECTILE_IMAGE_PATH = 'images/projectile.png'
@@ -30,12 +31,12 @@ ENEMIES_INITIAL_COUNT = 5
 
 # Configuração da tela
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Jogo com Imagem de Fundo")
+pygame.display.set_caption("Jogo com Mapa Gigante")
 
 # Carregar imagens
 try:
     background_image = pygame.image.load(BACKGROUND_IMAGE_PATH)
-    background_image = pygame.transform.scale(background_image, (WIDTH, HEIGHT))
+    background_image = pygame.transform.scale(background_image, (MAP_WIDTH, MAP_HEIGHT))
 except pygame.error as e:
     print(f"Erro ao carregar imagem de fundo: {e}")
     pygame.quit()
@@ -71,21 +72,20 @@ def create_enemy():
     border = random.choice(['top', 'bottom', 'left', 'right'])
 
     if border == 'top':
-        x_pos = random.randint(0, WIDTH - ENEMY_SIZE)
+        x_pos = random.randint(0, MAP_WIDTH - ENEMY_SIZE)
         y_pos = 0
     elif border == 'bottom':
-        x_pos = random.randint(0, WIDTH - ENEMY_SIZE)
-        y_pos = HEIGHT - ENEMY_SIZE
+        x_pos = random.randint(0, MAP_WIDTH - ENEMY_SIZE)
+        y_pos = MAP_HEIGHT - ENEMY_SIZE
     elif border == 'left':
         x_pos = 0
-        y_pos = random.randint(0, HEIGHT - ENEMY_SIZE)
+        y_pos = random.randint(0, MAP_HEIGHT - ENEMY_SIZE)
     elif border == 'right':
-        x_pos = WIDTH - ENEMY_SIZE
-        y_pos = random.randint(0, HEIGHT - ENEMY_SIZE)
+        x_pos = MAP_WIDTH - ENEMY_SIZE
+        y_pos = random.randint(0, MAP_HEIGHT - ENEMY_SIZE)
 
     speed = random.uniform(MIN_ENEMY_SPEED, MAX_ENEMY_SPEED)
     return [x_pos, y_pos, speed]
-
 
 # Função para criar projéteis
 def create_projectile(player_x, player_y, direction):
@@ -121,8 +121,8 @@ def draw_timer(start_time):
 def move_player(x, y, dx, dy):
     x += dx
     y += dy
-    x = max(0, min(WIDTH - PLAYER_SIZE, x))
-    y = max(0, min(HEIGHT - PLAYER_SIZE, y))
+    x = max(0, min(MAP_WIDTH - PLAYER_SIZE, x))
+    y = max(0, min(MAP_HEIGHT - PLAYER_SIZE, y))
     return x, y
 
 # Função para mover inimigos com velocidade aleatória
@@ -138,7 +138,7 @@ def move_enemies(player_x, player_y, enemies):
         ex += dx * speed
         ey += dy * speed
 
-        if 0 <= ex <= WIDTH - ENEMY_SIZE and 0 <= ey <= HEIGHT - ENEMY_SIZE:
+        if 0 <= ex <= MAP_WIDTH - ENEMY_SIZE and 0 <= ey <= MAP_HEIGHT - ENEMY_SIZE:
             new_enemies.append([ex, ey, speed])
     return new_enemies
 
@@ -170,7 +170,7 @@ def move_and_check_projectiles(projectiles, enemies):
                 remaining_enemies.remove([ex, ey, _])
                 break
 
-        if 0 <= px <= WIDTH and 0 <= py <= HEIGHT and not projectile_destroyed:
+        if 0 <= px <= MAP_WIDTH and 0 <= py <= MAP_HEIGHT and not projectile_destroyed:
             new_projectiles.append([px, py, direction, creation_time])
 
     return new_projectiles, remaining_enemies
@@ -229,13 +229,35 @@ def show_main_menu():
                     sys.exit()
 
 # Loop principal do jogo
+# Função para encontrar o inimigo mais próximo do jogador
+def find_closest_enemy(player_x, player_y, enemies):
+    closest_enemy = None
+    min_distance = float('inf')
+    for ex, ey, _ in enemies:
+        distance = math.sqrt((ex - player_x) ** 2 + (ey - player_y) ** 2)
+        if distance < min_distance:
+            min_distance = distance
+            closest_enemy = (ex, ey)
+    return closest_enemy
+
+# Função para criar projéteis em direção ao inimigo mais próximo
+def create_projectile_towards_enemy(player_x, player_y, enemy_x, enemy_y):
+    direction_x = enemy_x - (player_x + PLAYER_SIZE // 2)
+    direction_y = enemy_y - (player_y + PLAYER_SIZE // 2)
+    distance = math.sqrt(direction_x**2 + direction_y**2)
+    if distance > 0:
+        direction_x /= distance
+        direction_y /= distance
+    return create_projectile(player_x, player_y, (direction_x, direction_y))
+
+# Loop principal do jogo
 def game_loop():
     player_x, player_y = WIDTH // 2, HEIGHT // 2
     player_dx, player_dy = 0, 0
     initial_enemy_count = ENEMIES_INITIAL_COUNT
     enemies = [create_enemy() for _ in range(initial_enemy_count)]
     projectiles = []
-    
+
     clock = pygame.time.Clock()
     running = True
     last_shoot_time = pygame.time.get_ticks()
@@ -251,34 +273,6 @@ def game_loop():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-
-        # Obter a posição do mouse
-        mouse_x, mouse_y = pygame.mouse.get_pos()
-        
-        # Calcular a direção do projétil
-        direction_x = mouse_x - (player_x + PLAYER_SIZE // 2)
-        direction_y = mouse_y - (player_y + PLAYER_SIZE // 2)
-        distance = math.sqrt(direction_x**2 + direction_y**2)
-        if distance > 0:
-            direction_x /= distance
-            direction_y /= distance
-
-        # Adicionar um novo projétil a cada intervalo de tempo
-        current_time = pygame.time.get_ticks()
-        if current_time - last_shoot_time >= SHOOT_INTERVAL:
-            projectiles.append(create_projectile(player_x, player_y, (direction_x, direction_y)))
-            last_shoot_time = current_time
-
-        # Adicionar novos inimigos a cada 5 segundos
-        if current_time - last_enemy_spawn_time >= ENEMY_SPAWN_INTERVAL:
-            for _ in range(initial_enemy_count * enemy_multiplier):
-                enemies.append(create_enemy())
-            last_enemy_spawn_time = current_time
-
-        # Aumentar o número total de inimigos a cada 30 segundos
-        if current_time - last_enemy_increase_time >= ENEMY_INCREASE_INTERVAL:
-            enemy_multiplier *= 2
-            last_enemy_increase_time = current_time
 
         # Mover o jogador com WSAD
         keys = pygame.key.get_pressed()
@@ -300,26 +294,54 @@ def game_loop():
         enemies = move_enemies(player_x, player_y, enemies)
         projectiles, enemies = move_and_check_projectiles(projectiles, enemies)
 
+        # Adicionar um novo projétil a cada intervalo de tempo
+        current_time = pygame.time.get_ticks()
+        if current_time - last_shoot_time >= SHOOT_INTERVAL:
+            closest_enemy = find_closest_enemy(player_x, player_y, enemies)
+            if closest_enemy:
+                enemy_x, enemy_y = closest_enemy
+                projectiles.append(create_projectile_towards_enemy(player_x, player_y, enemy_x, enemy_y))
+                last_shoot_time = current_time
+
+        # Adicionar novos inimigos a cada 5 segundos
+        if current_time - last_enemy_spawn_time >= ENEMY_SPAWN_INTERVAL:
+            for _ in range(initial_enemy_count * enemy_multiplier):
+                enemies.append(create_enemy())
+            last_enemy_spawn_time = current_time
+
+        # Aumentar o número total de inimigos a cada 30 segundos
+        if current_time - last_enemy_increase_time >= ENEMY_INCREASE_INTERVAL:
+            enemy_multiplier *= 2
+            last_enemy_increase_time = current_time
+
         # Verificar colisões entre o jogador e inimigos
         if check_collision(player_x, player_y, enemies):
             show_game_over()
             return
 
+        # Atualizar a posição da câmera
+        camera_x = max(0, min(MAP_WIDTH - WIDTH, player_x - WIDTH // 2))
+        camera_y = max(0, min(MAP_HEIGHT - HEIGHT, player_y - HEIGHT // 2))
+
         # Limpar a tela
-        screen.blit(background_image, (0, 0))
+        screen.fill(BACKGROUND_COLOR)
+
+        # Desenhar o fundo
+        screen.blit(background_image, (-camera_x, -camera_y))
 
         # Desenhar o cronômetro
         draw_timer(level_start_time)
 
         # Desenhar o jogador, inimigos e projéteis
-        draw_player(player_x, player_y)
+        draw_player(player_x - camera_x, player_y - camera_y)
         for ex, ey, _ in enemies:
-            draw_enemy(ex, ey)
+            draw_enemy(ex - camera_x, ey - camera_y)
         for px, py, _, _ in projectiles:
-            draw_projectile(px, py)
+            draw_projectile(px - camera_x, py - camera_y)
 
         pygame.display.flip()
         clock.tick(FPS)
+
 
 def main():
     while True:
