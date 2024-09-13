@@ -19,10 +19,14 @@ def set_volume(volume_level):
     pygame.mixer.music.set_volume(volume_level)
 
 # Constantes
+player_level = 1
+player_points = 0
+points_to_next_level = 100  # Quantidade de pontos necessários para subir de nível
+
 MAP_WIDTH, MAP_HEIGHT = 3840, 2160  # Tamanho do mapa
 WIDTH, HEIGHT = 1920, 1080  # Tamanho da tela
 PLAYER_SIZE = 120
-ENEMY_SIZE = 50
+ENEMY_SIZE = 60
 PROJECTILE_SIZE = 35
 BACKGROUND_COLOR = (0, 0, 0)
 BACKGROUND_IMAGE_PATH = 'images/background.jpg'
@@ -31,11 +35,11 @@ ENEMY_IMAGE_PATH = 'images/enemy1.png'
 PROJECTILE_IMAGE_PATH = 'images/projectile.png'
 MUSIC_PATH = 'sound/background_music.mp3'
 FPS = 60
-PLAYER_SPEED = 5
+PLAYER_SPEED = 8
 MIN_ENEMY_SPEED = 2
 MAX_ENEMY_SPEED = 6
 PROJECTILE_SPEED = 7
-SHOOT_INTERVAL = 800  # Intervalo de disparo automático em milissegundos
+SHOOT_INTERVAL = 400  # Intervalo de disparo automático em milissegundos
 PROJECTILE_LIFE_TIME = 2000  # Tempo de vida dos projéteis em milissegundos
 LEVEL_DURATION = 60000  # Duração da fase em milissegundos (60 segundos)
 ENEMY_SPAWN_INTERVAL = 5000  # Intervalo para adicionar novos inimigos em milissegundos
@@ -190,12 +194,26 @@ def move_and_check_projectiles(projectiles, enemies):
             if projectile_rect.colliderect(enemy_rect):
                 projectile_destroyed = True
                 remaining_enemies.remove([ex, ey, _])
+                global player_points
+                player_points += 10  # Adiciona pontos ao jogador
                 break
 
         if 0 <= px <= MAP_WIDTH and 0 <= py <= MAP_HEIGHT and not projectile_destroyed:
             new_projectiles.append([px, py, direction, creation_time])
 
     return new_projectiles, remaining_enemies
+
+
+def check_level_up():
+    global player_level, player_points, points_to_next_level
+
+    while player_points >= points_to_next_level:
+        player_points -= points_to_next_level
+        player_level += 1
+        points_to_next_level *= 1.5  # Aumenta a dificuldade para o próximo nível
+        # Aqui você pode adicionar mais funcionalidades para o próximo nível, como aumentar a vida do jogador ou a dificuldade dos inimigos
+        print(f"Parabéns! Você alcançou o nível {player_level}")
+
 
 # Função para verificar colisões entre o jogador e inimigos
 def check_collision(player_x, player_y, enemies, current_time):
@@ -254,6 +272,7 @@ def show_main_menu():
     fullscreen_text = font.render('Pressione F para Tela Cheia', True, (255, 255, 255))
     volume_text = font.render(f'Volume: {int(pygame.mixer.music.get_volume() * 100)}%', True, (255, 255, 255))
     quit_text = font.render('Pressione ESC para Sair', True, (255, 255, 255))
+    level_text = font.render(f"Nível: {player_level}", True, (255, 255, 255))
 
     screen.fill(BACKGROUND_COLOR)
     screen.blit(title_text, (WIDTH // 2 - title_text.get_width() // 2, HEIGHT // 2 - title_text.get_height() // 2 - 100))
@@ -261,6 +280,8 @@ def show_main_menu():
     screen.blit(fullscreen_text, (WIDTH // 2 - fullscreen_text.get_width() // 2, HEIGHT // 2 - fullscreen_text.get_height() // 2 + 60))
     screen.blit(volume_text, (WIDTH // 2 - volume_text.get_width() // 2, HEIGHT // 2 - volume_text.get_height() // 2 + 120))
     screen.blit(quit_text, (WIDTH // 2 - quit_text.get_width() // 2, HEIGHT // 2 - quit_text.get_height() // 2 + 180))
+    screen.blit(level_text, (10, 10))  # Exibe o nível no menu
+
     pygame.display.flip()
 
     waiting_for_input = True
@@ -277,21 +298,11 @@ def show_main_menu():
                     sys.exit()
                 elif event.key == pygame.K_f:
                     screen, is_fullscreen = toggle_fullscreen(is_fullscreen)
-                    show_main_menu()  # Atualiza o menu após mudar para tela cheia/sem tela cheia
-                elif event.key == pygame.K_UP:
-                    current_volume = pygame.mixer.music.get_volume()
-                    new_volume = min(1.0, current_volume + 0.1)
-                    set_volume(new_volume)
-                    show_main_menu()  # Atualiza o menu após alterar o volume
-                elif event.key == pygame.K_DOWN:
-                    current_volume = pygame.mixer.music.get_volume()
-                    new_volume = max(0.0, current_volume - 0.1)
-                    set_volume(new_volume)
-                    show_main_menu()  # Atualiza o menu após alterar o volume
+                    show_main_menu()  # Atualiza o
 
 # Função para iniciar o loop do jogo
 def game_loop():
-    global player_last_hit_time
+    global player_last_hit_time, player_life, player_points, player_level
 
     player_x, player_y = WIDTH // 2, HEIGHT // 2
     player_dx, player_dy = 0, 0
@@ -334,6 +345,8 @@ def game_loop():
         enemies = move_enemies(player_x, player_y, enemies)
         projectiles, enemies = move_and_check_projectiles(projectiles, enemies)
 
+        check_level_up()  # Verifica se o jogador deve subir de nível
+
         current_time = pygame.time.get_ticks()
         if current_time - last_shoot_time >= SHOOT_INTERVAL:
             closest_enemy = find_closest_enemy(player_x, player_y, enemies)
@@ -369,6 +382,11 @@ def game_loop():
         for px, py, _, _ in projectiles:
             draw_projectile(px - camera_x, py - camera_y)
         draw_health_bar(player_life)
+
+        # Exibe o nível do jogador na tela
+        font = pygame.font.Font(None, 36)
+        level_text = font.render(f"Nível: {player_level}", True, (255, 255, 255))
+        screen.blit(level_text, (10, 30))
 
         pygame.display.flip()
         clock.tick(FPS)
